@@ -21,6 +21,11 @@ module Slather
       end
       private :circleci_job_id
 
+      def bitrise_job_id
+        ENV['BITRISE_BUILD_NUMBER']
+      end
+      private :bitrise_job_id
+
       def circleci_pull_request
         ENV['CIRCLE_PR_NUMBER'] || ENV['CI_PULL_REQUEST'] || ""
       end
@@ -96,11 +101,31 @@ module Slather
         "https://buildkite.com/" + ENV['BUILDKITE_PROJECT_SLUG'] + "/builds/" + ENV['BUILDKITE_BUILD_NUMBER'] + "#"
       end
 
+      def bitrise_git_info
+        {
+          :head => {
+            :id => ENV['BITRISE_GIT_COMMIT'],
+            :author_name => (`git log --format=%an -n 1 HEAD`.chomp || ""),
+            :author_email => (`git log --format=%ae -n 1 HEAD`.chomp || ""),
+            :message => (`git log --format=%s -n 1 HEAD`.chomp || "")
+          },
+          :branch => ENV['BITRISE_GIT_BRANCH']
+        }
+      end
+
+      def bitrise_build_url
+        "https://www.bitrise.io/build/" + ENV['BITRISE_BUILD_NUMBER'] + "#"
+      end
+
+      def bitrise_pull_request
+        ENV['BITRISE_PULL_REQUEST']
+      end
+
       def coveralls_coverage_data
         if ci_service == :travis_ci || ci_service == :travis_pro
           if travis_job_id
             if ci_service == :travis_ci
-              
+
               if coverage_access_token.to_s.strip.length > 0
                 raise StandardError, "Access token is set. Uploading coverage data for public repositories doesn't require an access token."
               end
@@ -110,7 +135,7 @@ module Slather
                 :service_name => "travis-ci",
                 :source_files => coverage_files.map(&:as_json)
               }.to_json
-            elsif ci_service == :travis_pro              
+            elsif ci_service == :travis_pro
 
               if coverage_access_token.to_s.strip.length == 0
                 raise StandardError, "Access token is not set. Uploading coverage data for private repositories requires an access token."
@@ -171,6 +196,20 @@ module Slather
           else
             raise StandardError, "Environment variable `BUILDKITE_BUILD_NUMBER` not set. Is this running on a buildkite build?"
           end
+        elsif ci_service == :bitrise
+          if bitrise_job_id
+            {
+              :service_job_id => bitrise_job_id,
+              :service_name => "bitrise",
+              :repo_token => coverage_access_token,
+              :source_files => coverage_files.map(&:as_json),
+              :git => bitrise_git_info,
+              :service_build_url => bitrise_build_url,
+              :service_pull_request => bitrise_pull_request
+            }.to_json
+          else
+            raise StandardError, "Environment variable `BITRISE_BUILD_NUMBER` not set. Is this running on a bitrise build?"
+          end
         else
           raise StandardError, "No support for ci named #{ci_service}"
         end
@@ -185,8 +224,8 @@ module Slather
 
           curl_result = `curl -s --form json_file=@#{f.path} #{coveralls_api_jobs_path}`
 
-          if curl_result.is_a? String 
-            curl_result_json = JSON.parse(curl_result)          
+          if curl_result.is_a? String
+            curl_result_json = JSON.parse(curl_result)
 
             if curl_result_json["error"]
               error_message = curl_result_json["message"]
