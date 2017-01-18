@@ -199,7 +199,6 @@ module Slather
         elsif ci_service == :bitrise
           if bitrise_job_id
             {
-              :service_job_id => bitrise_job_id,
               :service_name => "bitrise",
               :repo_token => coverage_access_token,
               :source_files => coverage_files.map(&:as_json),
@@ -229,7 +228,7 @@ module Slather
 
             if curl_result_json["error"]
               error_message = curl_result_json["message"]
-              raise StandardError, "Error while uploading coverage data to Coveralls. CI Service: #{ci_service} Message: #{error_message}"
+              raise StandardError, "Error while uploading coverage data to Coveralls. CI Service: #{ci_service} Message: #{error_message} Token: #{coverage_access_token}"
             end
           end
 
